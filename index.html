@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐔 Poule ! - Le Jeu du Poulailler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body {
+            background-color: #f6efd8;
+            background-image: radial-gradient(#d7ccc8 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            user-select: none;
+        }
+        .wood-border {
+            border: 6px solid #5d4037;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2), 0 10px 25px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-3 md:p-6 text-slate-800">
+
+    <!-- En-tête -->
+    <header class="text-center mb-2">
+        <h1 class="text-3xl md:text-5xl font-black text-red-700 tracking-wide drop-shadow-md flex items-center justify-center gap-2">
+            🐔 POULE ! 🐣
+        </h1>
+        <p class="text-amber-900 font-bold text-xs md:text-sm">Le jeu de cartes stratégique du poulailler</p>
+    </header>
+
+    <!-- Écran Accueil / Lobby -->
+    <div id="lobby-screen" class="w-full max-w-md bg-amber-50 rounded-3xl p-6 wood-border flex flex-col gap-4 my-auto">
+        <h2 class="text-xl font-extrabold text-amber-900 text-center">Menu du Poulailler</h2>
+        
+        <div class="flex flex-col gap-2">
+            <label class="text-xs font-bold text-amber-900">Votre Pseudo :</label>
+            <input type="text" id="player-name-input" value="Fermier" class="p-2.5 rounded-xl border-2 border-amber-300 font-bold text-amber-900 bg-white focus:outline-none focus:border-amber-600">
+        </div>
+
+        <button onclick="startSoloGame()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition active:scale-95 flex items-center justify-center gap-2">
+            🌾 Jouer Seul (Contre l'IA Coq)
+        </button>
+
+        <div class="relative flex py-1 items-center">
+            <div class="flex-grow border-t border-amber-300"></div>
+            <span class="flex-shrink mx-2 text-xs font-bold text-amber-800">OU MULTIJOUEUR EN LIGNE</span>
+            <div class="flex-grow border-t border-amber-300"></div>
+        </div>
+
+        <button onclick="createMultiplayerRoom()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-3 rounded-xl shadow-md transition active:scale-95 flex items-center justify-center gap-2">
+            ➕ Créer un Salon Multijoueur
+        </button>
+
+        <div class="flex gap-2">
+            <input type="text" id="room-code-input" placeholder="CODE DU SALON" class="flex-1 p-2.5 rounded-xl border-2 border-amber-300 font-bold text-amber-900 uppercase text-center bg-white focus:outline-none">
+            <button onclick="joinMultiplayerRoom()" class="bg-amber-800 hover:bg-amber-900 text-white font-extrabold px-4 rounded-xl shadow-md transition active:scale-95">
+                Rejoindre
+            </button>
+        </div>
+
+        <!-- Zone d'invitation -->
+        <div id="invite-box" class="hidden flex flex-col gap-2 bg-amber-100 p-3 rounded-xl border border-amber-300 text-center">
+            <span class="text-xs font-bold text-amber-900">Code du Salon : <span id="display-room-code" class="text-red-700 font-black text-sm">----</span></span>
+            <button onclick="copyInviteLink()" class="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1">
+                🔗 Copier le Lien d'Invitation Direct
+            </button>
+            <span id="room-status-text" class="text-xs text-amber-800 italic mt-1">En attente d'un adversaire...</span>
+        </div>
+    </div>
+
+    <!-- Écran Principal de Jeu -->
+    <main id="game-screen" class="hidden w-full max-w-4xl bg-amber-50 rounded-3xl p-4 md:p-6 wood-border flex flex-col gap-3 relative my-auto">
+        
+        <!-- Zone Adversaire -->
+        <div class="bg-amber-100/80 rounded-2xl p-3 border-2 border-dashed border-amber-300 text-center relative" id="opponent-zone">
+            <div class="flex justify-between items-center px-2 mb-2">
+                <span class="font-bold text-amber-900 text-sm md:text-base flex items-center gap-1" id="opponent-name">
+                    🐓 Adversaire
+                </span>
+                <span class="bg-amber-800 text-amber-100 text-xs px-2 py-1 rounded-full font-bold" id="opponent-score-tag">
+                    Score : ?
+                </span>
+            </div>
+            
+            <div class="flex justify-center gap-2 md:gap-4" id="opponent-hand"></div>
+        </div>
+
+        <!-- Zone Centrale (Pioche & Défausse) -->
+        <div class="bg-amber-200/60 rounded-2xl p-3 md:p-4 flex flex-wrap items-center justify-around gap-4 border border-amber-300">
+            
+            <!-- Pioche -->
+            <div class="flex flex-col items-center gap-1">
+                <span class="text-xs font-bold text-amber-900 uppercase tracking-wider">Pioche 🪺</span>
+                <div id="deck-btn" onclick="drawFromDeck()" class="w-16 h-24 md:w-20 md:h-28 bg-amber-600 rounded-xl border-2 border-amber-900 shadow-md cursor-pointer hover:scale-105 transition flex items-center justify-center text-3xl text-amber-100 font-bold">
+                    🪺
+                </div>
+            </div>
+
+            <!-- Défausse -->
+            <div class="flex flex-col items-center gap-1">
+                <span class="text-xs font-bold text-amber-900 uppercase tracking-wider">Défausse 🌾</span>
+                <div id="discard-pile" class="w-16 h-24 md:w-20 md:h-28 bg-amber-100 rounded-xl border-2 border-amber-400 shadow-inner flex items-center justify-center relative">
+                    <span class="text-slate-400 text-xs">Vide</span>
+                </div>
+            </div>
+
+            <!-- Bouton Annoncer Poule -->
+            <div class="flex flex-col gap-2 w-full sm:w-auto">
+                <button onclick="announcePoule()" class="bg-red-600 hover:bg-red-700 text-white font-black text-sm md:text-base px-6 py-3 rounded-xl shadow-lg transition active:scale-95 animate-pulse flex items-center justify-center gap-2">
+                    🐔 ANNONCER POULE !
+                </button>
+            </div>
+        </div>
+
+        <!-- Journal de bord / Instructions -->
+        <div id="game-log" class="bg-slate-800 text-amber-200 text-xs md:text-sm font-semibold p-3 rounded-xl text-center min-h-[42px] flex items-center justify-center border border-slate-700">
+            Initialisation du jeu...
+        </div>
+
+        <!-- Zone Joueur Humain -->
+        <div class="bg-white/80 rounded-2xl p-3 border-2 border-amber-400 text-center relative shadow-sm" id="player-zone">
+            <div class="flex justify-between items-center px-2 mb-2">
+                <span class="font-bold text-amber-900 text-sm md:text-base flex items-center gap-1" id="player-name-display">
+                    👩‍🌾 Votre Basse-Cour
+                </span>
+                <span class="bg-amber-800 text-amber-100 text-xs px-2 py-1 rounded-full font-bold" id="player-score-tag">
+                    Score : ?
+                </span>
+            </div>
+
+            <div class="flex justify-center gap-2 md:gap-4 flex-wrap" id="player-hand"></div>
+        </div>
+
+    </main>
+
+    <!-- Règles abrégées -->
+    <footer class="mt-2 text-center text-xs text-amber-900/80 max-w-2xl">
+        <p><b>Valeurs :</b> As = 1pt | 2 à 10 = Valeur | Valet/Dame/Roi Noir = 10pts | Roi Rouge = 0pt</p>
+        <p><b>Pouvoirs :</b> 7 (voir 1 carte) | Valet (échanger 2 cartes adverses) | Dame (échanger 1 carte avec l'adversaire)</p>
+    </footer>
+
+    <script>
+        // Configuration Firebase avec URL de la base européenne
+        const firebaseConfig = {
+            apiKey: "AIzaSyCwr7iXKDwF5FlEzGR_",
+            authDomain: "poule-123.firebaseapp.com",
+            databaseURL: "https://poule-123-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "poule-123",
+            storageBucket: "poule-123.appspot.com",
+            messagingSenderId: "73057171784
